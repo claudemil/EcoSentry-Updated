@@ -509,8 +509,7 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
     const handleCancelDrawing = () => {
       setDrawnPoints([]);
       setIsDrawingMode(false);
-      setEditingZoneId(null); // ← add this
-      // ...whatever else cancel already resets
+      setEditingZoneId(null);
     };
 
     const handleFinishDrawing = () => {
@@ -577,10 +576,10 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
     };
 
     const SPECIES_COLORS: Record<string, string> = {
-      "Water Hyacinth": "#1E88E5", // blue — distinct from green/orange/gold
-      "Water Lettuce": "#00897B", // teal — reads differently from verified-green
-      "Siam Weed": "#D81B60", // magenta/pink — nothing else in the palette is pink
-      "Lantana Camara": "#6D4C41", // brown — grounded, won't clash with gold/orange
+      "Water Hyacinth": "#1E88E5",
+      "Water Lettuce": "#00897B",
+      "Siam Weed": "#D81B60",
+      "Lantana Camara": "#6D4C41",
     };
 
     const getSpeciesColor = (label: string) =>
@@ -592,7 +591,7 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
       "Siam Weed",
       "Lantana Camara",
       "All",
-      ...(currentUser || user ? ["My Pins"] : []), // Show if Firebase user or state user exists
+      ...(currentUser || user ? ["My Pins"] : []),
     ];
 
     const filteredPins = pins
