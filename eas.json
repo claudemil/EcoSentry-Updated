@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 18.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "MAPBOX_DOWNLOADS_TOKEN": "sk.eyJ1Ijoiam9zaHZhbCIsImEiOiJjbXA5ZGJ4eW0wendvMnFzZmp0bW43MWJzIn0.PBWwiROg2dmghm15o23LYw"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+  "distribution": "internal",
+  "android": {
+    "buildType": "apk"
+  }
+},
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "MAPBOX_DOWNLOADS_TOKEN": "sk.eyJ1Ijoiam9zaHZhbCIsImEiOiJjbXA5ZGJ4eW0wendvMnFzZmp0bW43MWJzIn0.PBWwiROg2dmghm15o23LYw"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

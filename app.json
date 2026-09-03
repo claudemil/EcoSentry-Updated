@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "thesis-frontend",
+    "name": "Ecosentry",
     "slug": "thesis-frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,21 +12,37 @@
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
+      "jsEngine": "hermes",
+      "softwareKeyboardLayoutMode": "adjustResize",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.Ecosentry",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow access to your camera for plant detection."
+        }
+      ],
       "expo-router",
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": false,
+          "enableGPUDelegate": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -38,11 +54,39 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "sk.eyJ1Ijoiam9zaHZhbCIsImEiOiJjbXA5ZGJ4eW0wendvMnFzZmp0bW43MWJzIn0.PBWwiROg2dmghm15o23LYw"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-asset",
+        {
+          "assets": [
+            "./assets/yolov8n.tflite"
+          ]
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8ccca8e9-2ff7-42cf-8752-b79e29422b01"
+      }
+    },
+    "owner": "claudemil1"
   }
 }
