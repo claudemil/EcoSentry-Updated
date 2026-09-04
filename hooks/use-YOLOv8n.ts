@@ -1,83 +1,72 @@
 import { useTensorflowModel } from "react-native-fast-tflite";
 
-
 export type Detection = {
   label: string;
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
 };
 
-const CLASS_NAMES = [
-  "Lantana Camara",  // 0
-  "Water Lettuce",  // 1
-  "Siam Weed",       // 2
-  "Water Hyacinth", // 3
+export const CLASS_NAMES = [
+  "Lantana Camara",
+  "Water Lettuce",
+  "Siam Weed",
+  "Water Hyacinth",
 ];
 
-const CONFIDENCE_THRESHOLD = 0.50; // lowered slightly since sigmoid is now applied correctly
-const IOU_THRESHOLD = 0.20;
-
-// Converts raw logit to probability
+const CONFIDENCE_THRESHOLD = 0.5;
+const IOU_THRESHOLD = 0.2;
 
 export function useYOLOv8n() {
-  const model = useTensorflowModel(
-    require("../assets/yolov8n.tflite"),
-    []
-  );
+  const model = useTensorflowModel(require("../assets/yolov8n.tflite"), []);
 
   const runInference = async (inputTensor: Float32Array): Promise<Detection[]> => {
     if (model.state !== "loaded" || !model.model) return [];
 
     try {
-      // Run inference — input: [1, 640, 640, 3]
       const outputs = model.model.runSync([inputTensor.buffer as ArrayBuffer]);
-
-      // Output shape: [1, 8, 8400]
-      // flat Float32Array of length 1 * 8 * 8400 = 67200
-      // Row layout: 0=cx, 1=cy, 2=w, 3=h, 4=LantanaCamara, 5=Water-Lettuce, 6=siamweed, 7=water_hyacinth
       const raw = new Float32Array(outputs[0] as ArrayBuffer);
 
-
       const detections: Detection[] = [];
-
       const NUM_ANCHORS = 8400;
-for (let a = 0; a < NUM_ANCHORS; a++) {
-  const cx = raw[0 * NUM_ANCHORS + a];
-  const cy = raw[1 * NUM_ANCHORS + a];
-  const w  = raw[2 * NUM_ANCHORS + a];
-  const h  = raw[3 * NUM_ANCHORS + a];
 
-  let bestScore = -Infinity;
-  let bestClass = 0;
+      for (let a = 0; a < NUM_ANCHORS; a++) {
+        const cx = raw[0 * NUM_ANCHORS + a];
+        const cy = raw[1 * NUM_ANCHORS + a];
+        const w = raw[2 * NUM_ANCHORS + a];
+        const h = raw[3 * NUM_ANCHORS + a];
 
-  for (let c = 0; c < CLASS_NAMES.length; c++) {
-    const score = raw[(4 + c) * NUM_ANCHORS + a]; // no sigmoid
-    if (score > bestScore) {
-      bestScore = score;
-      bestClass = c;
-    }
-  }
+        let bestScore = -Infinity;
+        let bestClass = 0;
 
-  if (bestScore < CONFIDENCE_THRESHOLD) continue;
+        for (let c = 0; c < CLASS_NAMES.length; c++) {
+          const score = raw[(4 + c) * NUM_ANCHORS + a];
+          if (score > bestScore) {
+            bestScore = score;
+            bestClass = c;
+          }
+        }
 
-  const x = cx - w / 2;
-  const y = cy - h / 2;
+        if (bestScore < CONFIDENCE_THRESHOLD) continue;
 
-  if (x < -0.1 || y < -0.1 || w <= 0 || h <= 0) continue;
+        const x = cx - w / 2;
+        const y = cy - h / 2;
 
-  detections.push({
-    label: CLASS_NAMES[bestClass],
-    confidence: bestScore,
-    bbox: {
-      x: Math.max(0, x),
-      y: Math.max(0, y),
-      width: Math.min(1 - Math.max(0, x), w),
-      height: Math.min(1 - Math.max(0, y), h),
-    },
-  });
+        if (x < -0.1 || y < -0.1 || w <= 0 || h <= 0) continue;
 
-}
+        detections.push({
+          label: CLASS_NAMES[bestClass],
+          confidence: bestScore,
+          bbox: {
+            x: Math.max(0, x),
+            y: Math.max(0, y),
+            width: Math.min(1 - Math.max(0, x), w),
+            height: Math.min(1 - Math.max(0, y), h),
+          },
+        });
+      }
 
+      // Returns ALL distinct detections (multiple boxes per class allowed),
+      // sorted by confidence descending — index 0 is the most confident overall.
       return applyNMS(detections, IOU_THRESHOLD);
     } catch (e) {
       console.error("Inference error:", e);
@@ -86,6 +75,13 @@ for (let a = 0; a < NUM_ANCHORS; a++) {
   };
 
   return { model, runInference };
+}
+
+// Convenience helper for callers that still just want "the one best detection"
+// (e.g. thumbnail selection, "Pin This" popup)
+export function getBestDetection(detections: Detection[]): Detection | null {
+  if (detections.length === 0) return null;
+  return detections[0]; // already sorted by confidence in applyNMS
 }
 
 function iou(a: Detection["bbox"], b: Detection["bbox"]): number {
@@ -106,24 +102,31 @@ function iou(a: Detection["bbox"], b: Detection["bbox"]): number {
 }
 
 function applyNMS(detections: Detection[], iouThreshold: number): Detection[] {
-  // Sort by confidence descending
-  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+  // Group detections by class — NMS should only suppress overlapping boxes
+  // of the SAME class (likely the same physical plant seen twice),
+  // never boxes of different classes even if they overlap.
+  const byClass = new Map<string, Detection[]>();
+  for (const det of detections) {
+    const list = byClass.get(det.label) ?? [];
+    list.push(det);
+    byClass.set(det.label, list);
+  }
+
   const kept: Detection[] = [];
 
-  // Standard IoU-based NMS
-  for (const det of sorted) {
-    const overlaps = kept.some((k) => iou(det.bbox, k.bbox) > iouThreshold);
-    if (!overlaps) kept.push(det);
-  }
+  for (const classDetections of byClass.values()) {
+    const sorted = [...classDetections].sort((a, b) => b.confidence - a.confidence);
+    const keptForClass: Detection[] = [];
 
-  // Keep only the single best detection per class
-  const bestPerClass = new Map<string, Detection>();
-  for (const det of kept) {
-    const existing = bestPerClass.get(det.label);
-    if (!existing || det.confidence > existing.confidence) {
-      bestPerClass.set(det.label, det);
+    for (const det of sorted) {
+      const overlaps = keptForClass.some((k) => iou(det.bbox, k.bbox) > iouThreshold);
+      if (!overlaps) keptForClass.push(det);
     }
+
+    kept.push(...keptForClass);
   }
 
-  return Array.from(bestPerClass.values());
+  // Sort the final combined list by confidence descending —
+  // detections[0] is always the single most-confident detection overall
+  return kept.sort((a, b) => b.confidence - a.confidence);
 }

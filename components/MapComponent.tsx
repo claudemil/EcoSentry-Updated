@@ -114,6 +114,7 @@ interface MapComponentProps {
   highlightPinId?: string;
   onVerify?: (pinId: string, isVisible: boolean) => void;
   onStatusChange: (s: string) => void;
+  isSaving: boolean;
 }
 
 export interface AppUser {
@@ -144,6 +145,7 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
       highlightPinId,
       onVerify,
       onStatusChange,
+      isSaving,
     },
     ref,
   ) => {
@@ -783,12 +785,19 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
           <PinModal
             visible={isAddPinModalOpen}
             mode="create"
-            onSave={(finalData, mode) => {
-              onSave?.(finalData!, mode);
+            onSave={async (finalData, mode) => {
+              console.log(
+                "3️⃣ MapComponent onSave wrapper: calling parent onSave",
+              );
+              await onSave?.(finalData!, mode);
+              console.log(
+                "4️⃣ MapComponent onSave wrapper: parent onSave finished, closing modal",
+              );
               setisAddPinModalOpen(false);
             }}
             onClose={() => setisAddPinModalOpen(false)}
             pinData={pendingPin}
+            isSaving={isSaving}
           />
           {/* Saved zones */}
           {zones.map((zone) => {

@@ -13,6 +13,8 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
@@ -20,6 +22,8 @@ import { useYOLOv8n, type Detection } from "@/hooks/use-YOLOv8n";
 import { preprocessImage } from "@/utils/preprocessImage";
 import * as ImageManipulator from "expo-image-manipulator";
 import { COLORS } from "@/constants/Colors";
+import { getBestDetection, CLASS_NAMES } from "@/hooks/use-YOLOv8n";
+import { Ionicons } from "@expo/vector-icons";
 
 // Model input is 640x640 (square), camera preview fills SCREEN_W x SCREEN_H
 // Camera fills by cropping the longer axis, so we scale by the larger dimension
@@ -56,6 +60,7 @@ function ObserveScreenActive() {
   const isInferringRef = useRef(false);
   const isPinningRef = useRef(false);
   const [cameraDims, setCameraDims] = useState({ width: 0, height: 0 });
+  const [showStatsModal, setShowStatsModal] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
   const { model, runInference } = useYOLOv8n();
@@ -80,6 +85,12 @@ function ObserveScreenActive() {
     borderLeftWidth: index % 2 === 0 ? 3 : 0,
     borderRightWidth: index % 2 === 1 ? 3 : 0,
   });
+
+  const DETECTION_COLORS = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63"];
+  const getDetectionColor = (label: string) => {
+    const index = CLASS_NAMES.indexOf(label); // reuse CLASS_NAMES if imported, or hash the label
+    return DETECTION_COLORS[index % DETECTION_COLORS.length] ?? "#4CAF50";
+  };
   // ✅ Runs once per button tap instead of looping continuously
   const runDetection = useCallback(async () => {
     if (!cameraRef.current || isInferringRef.current || isPinningRef.current)
@@ -260,35 +271,43 @@ function ObserveScreenActive() {
           />
         )}
 
-        {bestDetection && cameraDims.width > 0 && (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: bestDetection.bbox.x * cameraDims.width,
-              top: bestDetection.bbox.y * cameraDims.height,
-              width: bestDetection.bbox.width * cameraDims.width,
-              height: bestDetection.bbox.height * cameraDims.height,
-              borderWidth: 2,
-              borderColor: "#4CAF50",
-              borderRadius: 4,
-            }}
-          >
-            <View style={styles.detectionLabel}>
-              <Text style={styles.detectionLabelText}>
-                {bestDetection.label}{" "}
-                {(bestDetection.confidence * 100).toFixed(0)}%
-              </Text>
-            </View>
+        {detections.length > 0 &&
+          cameraDims.width > 0 &&
+          detections.map((detection, i) => {
+            const isBest = i === 0;
+            const color = isBest
+              ? "#4CAF50"
+              : getDetectionColor(detection.label);
 
-            {CORNER_POSITIONS.map((pos, i) => (
+            return (
               <View
-                key={i}
-                style={[styles.cornerMarker, getCornerBorderStyle(i), pos]}
-              />
-            ))}
-          </View>
-        )}
+                key={`${detection.label}-${i}`}
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: detection.bbox.x * cameraDims.width,
+                  top: detection.bbox.y * cameraDims.height,
+                  width: detection.bbox.width * cameraDims.width,
+                  height: detection.bbox.height * cameraDims.height,
+                  borderWidth: isBest ? 2.5 : 1.5,
+                  borderColor: color,
+                  borderRadius: 4,
+                }}
+              >
+                {isBest &&
+                  CORNER_POSITIONS.map((pos, cornerIdx) => (
+                    <View
+                      key={cornerIdx}
+                      style={[
+                        styles.cornerMarker,
+                        getCornerBorderStyle(cornerIdx),
+                        pos,
+                      ]}
+                    />
+                  ))}
+              </View>
+            );
+          })}
 
         <View style={styles.liveIndicator}>
           <View
@@ -304,7 +323,13 @@ function ObserveScreenActive() {
             ]}
           />
           <Text style={styles.liveText}>
-            {isPaused ? "Paused" : isInferring ? "Analyzing…" : "Ready"}
+            {isPaused
+              ? "Paused"
+              : isInferring
+                ? "Analyzing…"
+                : detections.length > 0
+                  ? `${detections.length} detected`
+                  : "Ready"}
           </Text>
         </View>
 
@@ -324,18 +349,23 @@ function ObserveScreenActive() {
         )}
       </CameraView>
 
-      {bestDetection && (
+      {detections.length > 0 && (
         <View style={styles.resultsPanel}>
           <View style={styles.resultRow}>
             <View style={styles.resultInfo}>
               <Text style={styles.resultsTitle}>Detected Plant</Text>
-              <Text style={styles.resultItem}>🌿 {bestDetection.label}</Text>
+              <Text style={styles.resultItem}>
+                🌿 {getBestDetection(detections)?.label}
+              </Text>
               <Text style={styles.confidenceText}>
-                {(bestDetection.confidence * 100).toFixed(1)}% confidence
+                {(
+                  (getBestDetection(detections)?.confidence ?? 0) * 100
+                ).toFixed(1)}
+                % confidence
               </Text>
             </View>
 
-            <View style={styles.actionBtns}>
+            <View style={styles.actionBtnsColumn}>
               <TouchableOpacity
                 style={styles.pinBtn}
                 onPress={handlePinThis}
@@ -345,19 +375,30 @@ function ObserveScreenActive() {
                 <Text style={styles.pinBtnText}>Pin This</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.resumeBtn}
-                onPress={handleResume}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.resumeBtnText}>✕ Skip</Text>
-              </TouchableOpacity>
+              <View style={styles.secondaryActionsRow}>
+                <TouchableOpacity
+                  style={styles.secondaryActionBtn}
+                  onPress={() => setShowStatsModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="stats-chart" size={14} color="#666" />
+                  <Text style={styles.secondaryActionText}>Stats</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryActionBtn}
+                  onPress={handleResume}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryActionText}>✕ Skip</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
       )}
 
-      {!bestDetection && isPaused && (
+      {detections.length === 0 && isPaused && (
         <View style={styles.hintPanel}>
           <Text style={styles.hintText}>No plant detected. Try again.</Text>
           <TouchableOpacity onPress={handleResume} style={{ marginTop: 8 }}>
@@ -365,6 +406,93 @@ function ObserveScreenActive() {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal
+        visible={showStatsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStatsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.statsModalContent}>
+            <Text style={styles.title}>Frame Statistics</Text>
+
+            {/* Total count */}
+            <View style={styles.statsSummaryRow}>
+              <View style={styles.statsSummaryCard}>
+                <Text style={styles.statsSummaryNumber}>
+                  {detections.length}
+                </Text>
+                <Text style={styles.statsSummaryLabel}>Total Detected</Text>
+              </View>
+              <View style={styles.statsSummaryCard}>
+                <Text style={styles.statsSummaryNumber}>
+                  {detections.filter((d) => d.confidence < 0.6).length}
+                </Text>
+                <Text style={styles.statsSummaryLabel}>Low Confidence</Text>
+              </View>
+            </View>
+
+            {/* Per-species breakdown */}
+            <Text style={styles.sectionLabel}>Species Breakdown</Text>
+            <ScrollView style={styles.statsList}>
+              {Object.entries(
+                detections.reduce(
+                  (acc, det) => {
+                    acc[det.label] = (acc[det.label] ?? 0) + 1;
+                    return acc;
+                  },
+                  {} as Record<string, number>,
+                ),
+              ).map(([species, count]) => (
+                <View key={species} style={styles.statsListItem}>
+                  <View
+                    style={[
+                      styles.statsSpeciesDot,
+                      { backgroundColor: getDetectionColor(species) },
+                    ]}
+                  />
+                  <Text style={styles.statsListLabel}>{species}</Text>
+                  <Text style={styles.statsListCount}>{count}</Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Per-detection confidence list */}
+            <Text style={styles.sectionLabel}>All Detections</Text>
+            <ScrollView style={styles.statsList}>
+              {detections.map((det, i) => (
+                <View key={i} style={styles.statsListItem}>
+                  <View
+                    style={[
+                      styles.confidenceBadge,
+                      det.confidence < 0.6 && styles.confidenceBadgeLow,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.confidenceBadgeText,
+                        det.confidence < 0.6 && styles.confidenceBadgeTextLow,
+                      ]}
+                    >
+                      {(det.confidence * 100).toFixed(0)}%
+                    </Text>
+                  </View>
+                  <Text style={styles.statsListLabel}>{det.label}</Text>
+                  {i === 0 && <Text style={styles.bestBadge}>Best</Text>}
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { marginTop: 12 }]}
+              onPress={() => setShowStatsModal(false)}
+            >
+              <Text style={styles.secondaryButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -460,13 +588,29 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.green700,
   },
-  actionBtns: {
-    flexDirection: "row",
-    alignItems: "center",
+  actionBtnsColumn: {
     gap: 8,
   },
-
-  // Primary Pin Button
+  secondaryActionsRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  secondaryActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    flex: 1,
+  },
+  secondaryActionText: {
+    fontSize: 8,
+    fontWeight: "600",
+    color: "#666",
+  },
   pinBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -484,8 +628,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 13,
   },
-
-  // Secondary Skip Button
   resumeBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -548,5 +690,146 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#4CAF50",
     fontWeight: "600",
+  },
+  otherDetectionsList: {
+    marginTop: 6,
+  },
+  otherDetectionText: {
+    fontSize: 11,
+    color: "#666",
+    marginTop: 2,
+  },
+  resultsTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statsIconBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(76, 175, 80, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statsModalContent: {
+    width: "90%",
+    maxWidth: 400,
+    maxHeight: "75%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 18,
+  },
+  statsSummaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  statsSummaryCard: {
+    flex: 1,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  statsSummaryNumber: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#2E7D32",
+  },
+  statsSummaryLabel: {
+    fontSize: 11,
+    color: "#757575",
+    marginTop: 2,
+    textAlign: "center",
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2E7D32",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  statsList: {
+    maxHeight: 140,
+    marginBottom: 12,
+  },
+  statsListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    gap: 8,
+  },
+  statsSpeciesDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statsListLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: "#333",
+  },
+  statsListCount: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2E7D32",
+  },
+  confidenceBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.12)",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 44,
+    alignItems: "center",
+  },
+  confidenceBadgeLow: {
+    backgroundColor: "rgba(255, 87, 34, 0.12)",
+  },
+  confidenceBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2E7D32",
+  },
+  confidenceBadgeTextLow: {
+    color: "#FF5722",
+  },
+  bestBadge: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#fff",
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  secondaryButton: {
+    backgroundColor: "rgba(76, 175, 80, 0.08)",
+    borderWidth: 1.5,
+    borderColor: "#4CAF50",
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonText: {
+    color: "#4CAF50",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1B1B1B",
   },
 });

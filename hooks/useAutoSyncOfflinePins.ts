@@ -3,9 +3,9 @@ import { useEffect } from "react";
 import NetInfo from "@react-native-community/netinfo";
 import { useOfflinePinStore } from "@/app/store/OfflinePinStore";
 import { auth, db } from "@/firebaseConfig";
-import { addDoc, collection, doc, setDoc, increment } from "firebase/firestore";
-import { uploadToCloudinary } from "@/utils/uploadToCloudinary"; // adjust path
-import { PinVerification } from "@/components/MapComponent"; // adjust path
+import { addDoc, collection, doc, getDoc, setDoc, increment } from "firebase/firestore";
+import { uploadToCloudinary } from "@/utils/uploadToCloudinary";
+import { PinVerification } from "@/components/MapComponent";
 
 export function useAutoSyncOfflinePins() {
   useEffect(() => {
@@ -19,13 +19,25 @@ export function useAutoSyncOfflinePins() {
       const { offlinePins, removeOfflinePin } = useOfflinePinStore.getState();
       if (offlinePins.length === 0) return;
 
+      // Fetch the user's Firestore profile once per sync batch, not per-pin
+      let username = currentUser.displayName || currentUser.email || "Anonymous";
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          username = data.username || username;
+        }
+      } catch (e) {
+        console.error("Failed to fetch username for sync:", e);
+        // fall back to the default computed above
+      }
+
       for (const pin of offlinePins) {
         try {
           const imageUrl = pin.image
             ? await uploadToCloudinary(pin.image)
             : "https://picsum.photos/536/354";
 
-          // Upload any additional images, preserving order
           const additionalImages = pin.images ?? [];
           const uploadedImages: string[] = await Promise.all(
             additionalImages.map((img) => uploadToCloudinary(img))
@@ -42,14 +54,14 @@ export function useAutoSyncOfflinePins() {
             longitude: pin.lng,
             specie_label: pin.label,
             image_url: imageUrl,
-            images: uploadedImages, 
+            images: uploadedImages,
             verifications: [initialVerification],
             userId: currentUser.uid,
-            created_by: currentUser.displayName || currentUser.email || "Anonymous",
+            created_by: username, // ← now correctly uses Firestore username
             creator: {
               uid: currentUser.uid,
               email: currentUser.email || "",
-              username: currentUser.displayName || "Anonymous User",
+              username, // ← same fix here
             },
             createdAt: new Date(pin.timestamp).toISOString(),
           });

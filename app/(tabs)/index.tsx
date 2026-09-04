@@ -66,6 +66,7 @@ export default function Index() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [pins, setPins] = useState<SpeciesPin[]>([]);
   const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [userLocation, setUserLocation] = useState<{
     longitude: number;
     latitude: number;
@@ -314,130 +315,8 @@ export default function Index() {
     mapRef.current?.openCreatePin(newPin);
   };
 
-  //use this if the new performsave doesnt work tomorrow
-  // const performSave = async (newPin: SpeciesPin, mode: "view" | "create") => {
-  //   const currentUser = auth.currentUser;
-
-  //   if (!currentUser) {
-  //     Alert.alert("Error", "Your session has expired. Please login again.");
-  //     setIsLoggedIn(false);
-  //     return;
-  //   }
-
-  //   // ── Offline branch ──
-  //   const network = await NetInfo.fetch();
-  //   const isOnline = network.isConnected && network.isInternetReachable;
-
-  //   if (!isOnline) {
-  //     if (mode === "view") {
-  //       // Editing an existing pin while offline isn't supported yet —
-  //       // syncing an update against a doc that might not exist locally is riskier
-  //       // than creating new offline pins. Block it clearly instead of failing silently.
-  //       Alert.alert(
-  //         "You're offline",
-  //         "Editing existing pins requires an internet connection. Please try again once you're back online.",
-  //       );
-  //       return;
-  //     }
-
-  //     // Save new pin locally — keep local image URIs as-is, upload happens at sync time
-  //     useOfflinePinStore.getState().addOfflinePin({
-  //       id: `offline-${Date.now()}`,
-  //       label: newPin.specie_label,
-  //       lat: parseFloat(newPin.latitude.toString()),
-  //       lng: parseFloat(newPin.longitude.toString()),
-  //       image: newPin.image_url, // local URI, uploaded to Cloudinary during sync
-  //       timestamp: Date.now(),
-  //     });
-
-  //     Alert.alert(
-  //       "Saved offline",
-  //       "You're offline — this pin was saved on your device and will upload automatically once you're back online.",
-  //     );
-  //     return;
-  //   }
-
-  //   // ── Online branch — unchanged from your existing logic ──
-  //   try {
-  //     let imageUrl = newPin.image_url;
-  //     if (
-  //       imageUrl &&
-  //       !imageUrl.startsWith("http://") &&
-  //       !imageUrl.startsWith("https://")
-  //     ) {
-  //       imageUrl = await uploadToCloudinary(imageUrl);
-  //     }
-
-  //     const currentImages = newPin.images ?? [];
-  //     const uploadPromises = currentImages.map(async (img) => {
-  //       if (img.startsWith("http://") || img.startsWith("https://")) {
-  //         return img;
-  //       }
-  //       return await uploadToCloudinary(img);
-  //     });
-  //     const uploadedImages: string[] = await Promise.all(uploadPromises);
-
-  //     const plainCreator = currentUser
-  //       ? {
-  //           uid: currentUser.uid,
-  //           email: currentUser.email || "",
-  //           username:
-  //             currentUser.displayName || user?.username || "Anonymous User",
-  //         }
-  //       : null;
-
-  //     const isExistingPin = mode === "view";
-  //     if (isExistingPin) {
-  //       const pinRef = doc(db, "pins", String(newPin.id));
-  //       await updateDoc(pinRef, {
-  //         specie_label: newPin.specie_label,
-  //         image_url: imageUrl || "https://picsum.photos/536/354",
-  //         images: uploadedImages,
-  //       });
-  //       console.log("Pin updated successfully:", newPin.id);
-  //     } else {
-  //       const initialVerification: PinVerification = {
-  //         timestamp: Date.now(),
-  //         verified: true,
-  //         userId: currentUser.uid,
-  //       };
-
-  //       const pinPayload = {
-  //         latitude: parseFloat(newPin.latitude.toString()),
-  //         longitude: parseFloat(newPin.longitude.toString()),
-  //         specie_label: newPin.specie_label,
-  //         image_url: imageUrl || "https://picsum.photos/536/354",
-  //         images: uploadedImages,
-  //         verifications: [initialVerification],
-  //         userId: currentUser.uid,
-  //         created_by:
-  //           currentUser.displayName || currentUser.email || "Anonymous",
-  //         creator: plainCreator,
-  //         createdAt: serverTimestamp(),
-  //       };
-
-  //       const docRef = await addDoc(collection(db, "pins"), pinPayload);
-  //       console.log("Pin saved successfully with ID:", docRef.id);
-
-  //       const userRef = doc(db, "users", currentUser.uid);
-  //       await setDoc(userRef, { pins_count: increment(1) }, { merge: true });
-  //     }
-
-  //     setTimeout(() => {
-  //       fetchPins();
-  //     }, 0);
-
-  //     Alert.alert(
-  //       "Success",
-  //       isExistingPin ? "Pin updated!" : "Pin successfully saved!",
-  //     );
-  //   } catch (error) {
-  //     console.error("Error saving pin to Firestore:", error);
-  //     Alert.alert("Save Failed", "Could not save your pin. Please try again.");
-  //   }
-  // };
-
   const performSave = async (newPin: SpeciesPin, mode: "view" | "create") => {
+    console.log("5️⃣ performSave: started");
     const currentUser = auth.currentUser;
 
     if (!currentUser) {
@@ -446,50 +325,62 @@ export default function Index() {
       return;
     }
 
-    // ── Offline branch ──
-    const network = await NetInfo.fetch();
-    const isOnline = network.isConnected && network.isInternetReachable;
+    setIsSaving(true); // ← start
 
-    if (!isOnline) {
-      if (mode === "view") {
+    try {
+      const network = await NetInfo.fetch();
+      const isOnline = network.isConnected && network.isInternetReachable;
+
+      if (!isOnline) {
+        if (mode === "view") {
+          Alert.alert(
+            "You're offline",
+            "Editing existing pins requires an internet connection. Please try again once you're back online.",
+          );
+          return;
+        }
+
+        useOfflinePinStore.getState().addOfflinePin({
+          id: `offline-${Date.now()}`,
+          label: newPin.specie_label,
+          lat: parseFloat(newPin.latitude.toString()),
+          lng: parseFloat(newPin.longitude.toString()),
+          image: newPin.image_url,
+          images: newPin.images ?? [],
+          timestamp: Date.now(),
+        });
+
         Alert.alert(
-          "You're offline",
-          "Editing existing pins requires an internet connection. Please try again once you're back online.",
+          "Saved offline",
+          "You're offline — this pin was saved on your device and will upload automatically once you're back online.",
         );
         return;
       }
 
-      // Save new pin locally — thumbnail and additional images kept separate,
-      // both as local URIs; upload happens at sync time
-      useOfflinePinStore.getState().addOfflinePin({
-        id: `offline-${Date.now()}`,
-        label: newPin.specie_label,
-        lat: parseFloat(newPin.latitude.toString()),
-        lng: parseFloat(newPin.longitude.toString()),
-        image: newPin.image_url, // thumbnail only
-        images: newPin.images ?? [], // additional images, if any — kept distinct
-        timestamp: Date.now(),
-      });
+      // ── Online branch ──
 
-      Alert.alert(
-        "Saved offline",
-        "You're offline — this pin was saved on your device and will upload automatically once you're back online.",
-      );
-      return;
-    }
+      console.log("5b️⃣ Starting image upload check");
 
-    // ── Online branch — unchanged ──
-    try {
       let imageUrl = newPin.image_url;
+      console.log("Checking image url..", imageUrl);
+
       if (
         imageUrl &&
         !imageUrl.startsWith("http://") &&
         !imageUrl.startsWith("https://")
       ) {
+        console.log("5c️⃣ Uploading thumbnail to Cloudinary...");
         imageUrl = await uploadToCloudinary(imageUrl);
+        console.log("5d️⃣ Thumbnail upload done:", imageUrl);
+      } else {
+        console.log("5e️⃣ Thumbnail already a URL, skipping upload");
       }
 
       const currentImages = newPin.images ?? [];
+      console.log(
+        "5f️⃣ Uploading additional images, count:",
+        currentImages.length,
+      );
       const uploadPromises = currentImages.map(async (img) => {
         if (img.startsWith("http://") || img.startsWith("https://")) {
           return img;
@@ -497,13 +388,17 @@ export default function Index() {
         return await uploadToCloudinary(img);
       });
       const uploadedImages: string[] = await Promise.all(uploadPromises);
+      console.log("5g️⃣ Additional images done:", uploadedImages);
 
       const plainCreator = currentUser
         ? {
             uid: currentUser.uid,
             email: currentUser.email || "",
             username:
-              currentUser.displayName || user?.username || "Anonymous User",
+              user?.username ||
+              currentUser.displayName ||
+              currentUser.email ||
+              "Anonymous User",
           }
         : null;
 
@@ -515,7 +410,6 @@ export default function Index() {
           image_url: imageUrl || "https://picsum.photos/536/354",
           images: uploadedImages,
         });
-        console.log("Pin updated successfully:", newPin.id);
       } else {
         const initialVerification: PinVerification = {
           timestamp: Date.now(),
@@ -532,16 +426,21 @@ export default function Index() {
           verifications: [initialVerification],
           userId: currentUser.uid,
           created_by:
-            currentUser.displayName || currentUser.email || "Anonymous",
+            user?.username ||
+            currentUser.displayName ||
+            currentUser.email ||
+            "Anonymous",
           creator: plainCreator,
           createdAt: serverTimestamp(),
         };
 
+        console.log("5h️⃣ About to write to Firestore");
         const docRef = await addDoc(collection(db, "pins"), pinPayload);
-        console.log("Pin saved successfully with ID:", docRef.id);
+        console.log("5i️⃣ Firestore write done:", docRef.id);
 
         const userRef = doc(db, "users", currentUser.uid);
         await setDoc(userRef, { pins_count: increment(1) }, { merge: true });
+        console.log("5j️⃣ pins_count increment done");
       }
 
       setTimeout(() => {
@@ -555,6 +454,9 @@ export default function Index() {
     } catch (error) {
       console.error("Error saving pin to Firestore:", error);
       Alert.alert("Save Failed", "Could not save your pin. Please try again.");
+    } finally {
+      console.log("6️⃣ performSave: finished (finally block)");
+      setIsSaving(false);
     }
   };
   const handleVerifyPin = async (pinId: string, isVisible: boolean) => {
@@ -663,6 +565,7 @@ export default function Index() {
           highlightPinId={params.highlightPinId as string | undefined}
           onVerify={handleVerifyPin}
           onStatusChange={setSelectedStatus}
+          isSaving={isSaving} // ← new
         />
 
         {/* Persistent hamburger toggle — always visible */}

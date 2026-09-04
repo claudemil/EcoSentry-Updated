@@ -10,7 +10,7 @@ export type OfflinePin = {
   image: string;       // thumbnail (image_url)
   images?: string[];   
   timestamp: number;
-};
+}; 
 
 type OfflinePinStore = {
   offlinePins: OfflinePin[];

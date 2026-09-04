@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { SpeciesPin } from "../MapComponent";
-import { Modal } from "react-native";
+import { ActivityIndicator, Modal } from "react-native";
 import { View, StyleSheet, Text, Image, Alert } from "react-native";
 import { TouchableOpacity, ScrollView } from "react-native";
 import { router } from "expo-router";
@@ -19,6 +19,7 @@ interface PinModalProp {
   setHighlightedNeighborId?: (id: string | null) => void;
   onVerify?: (pinId: string, isVisible: boolean) => void;
   canVerify?: boolean; // ✅ new — is the user physically near this pin?
+  isSaving?: boolean;
 }
 const PinModal = ({
   visible,
@@ -28,6 +29,7 @@ const PinModal = ({
   mode,
   onVerify,
   canVerify,
+  isSaving,
 }: PinModalProp) => {
   const [creatorName, setCreatorName] = useState<string>("Loading...");
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
@@ -51,7 +53,7 @@ const PinModal = ({
     let isMounted = true;
 
     const fetchCreatorDetails = async () => {
-      if (!pinData) return; // ✅ guard inside the effect body instead
+      if (!pinData) return;
       if (pinData?.creator?.username) {
         setCreatorName(pinData.creator.username);
         return;
@@ -149,12 +151,14 @@ const PinModal = ({
     setImages((prev) => prev.filter((uri) => uri !== uriToRemove));
   };
 
-  const handleSavePress = () => {
+  // In PinModal's handleSavePress:
+  const handleSavePress = async () => {
     if (!pinData) return;
-    onSave?.({ ...pinData, images }, mode);
+    console.log("1️⃣ handleSavePress: calling onSave");
+    await onSave?.({ ...pinData, images }, mode);
+    console.log("2️⃣ handleSavePress: onSave finished");
   };
 
-  // ✅ Early return now comes AFTER every hook has been called
   if (!pinData) return null;
 
   const currentUser = auth.currentUser;
@@ -342,6 +346,7 @@ const PinModal = ({
             <TouchableOpacity
               style={[styles.secondaryButton, { flex: 1 }]}
               onPress={onClose}
+              disabled={isSaving}
             >
               <Text style={styles.secondaryButtonText}>
                 {isCreateMode ? "Cancel" : "Close"}
@@ -351,12 +356,21 @@ const PinModal = ({
             {/* ✅ Shown in both modes now, since photos can be added post-creation too */}
             {isOwner && (
               <TouchableOpacity
-                style={[styles.primaryButton, { flex: 1.5 }]}
+                style={[
+                  styles.primaryButton,
+                  { flex: 1.5 },
+                  isSaving && styles.disabledButton,
+                ]}
                 onPress={handleSavePress}
+                disabled={isSaving}
               >
-                <Text style={styles.primaryButtonText}>
-                  {isCreateMode ? "Save Pin" : "Save Changes"}
-                </Text>
+                {isSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {isCreateMode ? "Save Pin" : "Save Changes"}
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -425,6 +439,13 @@ const PinModal = ({
             >
               <Text style={styles.secondaryButtonText}>Close</Text>
             </TouchableOpacity>
+
+            {isSaving && (
+              <View style={styles.savingOverlay}>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.savingOverlayText}>Saving pin...</Text>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -711,6 +732,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  savingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 16,
+  },
+  savingOverlayText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 10,
   },
 });
 
