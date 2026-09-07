@@ -61,7 +61,7 @@ function ObserveScreenActive() {
   const isPinningRef = useRef(false);
   const [cameraDims, setCameraDims] = useState({ width: 0, height: 0 });
   const [showStatsModal, setShowStatsModal] = useState(false);
-
+  const [showLegendModal, setShowLegendModal] = useState(false);
   const cameraRef = useRef<CameraView>(null);
   const { model, runInference } = useYOLOv8n();
   const router = useRouter();
@@ -88,7 +88,7 @@ function ObserveScreenActive() {
 
   const DETECTION_COLORS = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63"];
   const getDetectionColor = (label: string) => {
-    const index = CLASS_NAMES.indexOf(label); // reuse CLASS_NAMES if imported, or hash the label
+    const index = CLASS_NAMES.indexOf(label);
     return DETECTION_COLORS[index % DETECTION_COLORS.length] ?? "#4CAF50";
   };
   // ✅ Runs once per button tap instead of looping continuously
@@ -333,6 +333,15 @@ function ObserveScreenActive() {
           </Text>
         </View>
 
+        {/* New: legend info button */}
+        <TouchableOpacity
+          style={styles.legendInfoBtn}
+          onPress={() => setShowLegendModal(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="information-circle-outline" size={22} color="#fff" />
+        </TouchableOpacity>
+
         {!isPaused && (
           <TouchableOpacity
             style={styles.scanBtn}
@@ -487,6 +496,53 @@ function ObserveScreenActive() {
             <TouchableOpacity
               style={[styles.secondaryButton, { marginTop: 12 }]}
               onPress={() => setShowStatsModal(false)}
+            >
+              <Text style={styles.secondaryButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showLegendModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLegendModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.legendModalContent}>
+            <Text style={styles.title}>Box Color Legend</Text>
+
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { borderColor: "#4CAF50" }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.legendItemTitle}>Best Detection</Text>
+                <Text style={styles.legendItemSubtitle}>
+                  Highest confidence — this is the one that gets pinned
+                </Text>
+              </View>
+            </View>
+
+            {CLASS_NAMES.map((species) => (
+              <View key={species} style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendSwatch,
+                    { borderColor: getDetectionColor(species) },
+                  ]}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.legendItemTitle}>{species}</Text>
+                  <Text style={styles.legendItemSubtitle}>
+                    Detected, but not the top match
+                  </Text>
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { marginTop: 12 }]}
+              onPress={() => setShowLegendModal(false)}
             >
               <Text style={styles.secondaryButtonText}>Close</Text>
             </TouchableOpacity>
@@ -831,5 +887,49 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     color: "#1B1B1B",
+  },
+  legendInfoBtn: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  legendModalContent: {
+    width: "88%",
+    maxWidth: 380,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 18,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
+  },
+  legendSwatch: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 3,
+    backgroundColor: "transparent",
+  },
+  legendItemTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+  legendItemSubtitle: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 2,
   },
 });
