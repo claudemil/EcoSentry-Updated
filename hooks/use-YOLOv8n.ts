@@ -13,8 +13,8 @@ export const CLASS_NAMES = [
   "Water Hyacinth",
 ];
 
-const CONFIDENCE_THRESHOLD = 0.5;
-const IOU_THRESHOLD = 0.2;
+const CONFIDENCE_THRESHOLD = 0.6;
+const IOU_THRESHOLD = 0.3;
 
 export function useYOLOv8n() {
   const model = useTensorflowModel(require("../assets/yolov8n.tflite"), []);
