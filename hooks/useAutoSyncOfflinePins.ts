@@ -55,6 +55,7 @@ export function useAutoSyncOfflinePins() {
             specie_label: pin.label,
             image_url: imageUrl,
             images: uploadedImages,
+              detections: pin.detections ?? {}, // ← new
             verifications: [initialVerification],
             userId: currentUser.uid,
             created_by: username, // ← now correctly uses Firestore username

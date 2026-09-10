@@ -563,8 +563,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "white",
-    fontWeight: "bold",
-    fontSize: 16,
+    fontWeight: "800",
+    fontSize: 18,
   },
   secondaryButton: {
     backgroundColor: "#f5f5f5",

@@ -46,6 +46,29 @@ export type PinVerification = {
   userName?: string; // ← new, denormalized at write time
 };
 
+export type BoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type SpeciesVerification = {
+  userId: string;
+  correct: boolean; // true = "yes, correctly identified", false = "no, wrong species"
+  correctedLabel?: string; // only set when correct === false
+  timestamp: number;
+  username?: string;
+};
+
+export type PinDetection = {
+  label: string;
+  confidence: number;
+  bbox: BoundingBox;
+  isBest: boolean;
+  speciesVerifications?: SpeciesVerification[];
+};
+
 export interface SpeciesPin {
   id: number | string;
   longitude: number;
@@ -59,6 +82,7 @@ export interface SpeciesPin {
   creator?: AppUser | null; // Nested user details
   createdAt?: string;
   verifications?: PinVerification[];
+  detections?: Record<string, PinDetection>;
 }
 
 interface ZoneConfig {
@@ -131,6 +155,13 @@ export interface MapComponentHandle {
   openCreatePin: (pin: SpeciesPin) => void;
   startDrawingZone: () => void;
 }
+
+export const SPECIES_COLORS: Record<string, string> = {
+  "Water Hyacinth": "#1E88E5",
+  "Water Lettuce": "#00897B",
+  "Siam Weed": "#D81B60",
+  "Lantana Camara": "#6D4C41",
+};
 
 const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
   (
@@ -575,13 +606,6 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
       if (!isDrawingMode) return;
       const [lng, lat] = e.geometry.coordinates;
       setDrawnPoints((prev) => [...prev, [lng, lat] as [number, number]]);
-    };
-
-    const SPECIES_COLORS: Record<string, string> = {
-      "Water Hyacinth": "#1E88E5",
-      "Water Lettuce": "#00897B",
-      "Siam Weed": "#D81B60",
-      "Lantana Camara": "#6D4C41",
     };
 
     const getSpeciesColor = (label: string) =>

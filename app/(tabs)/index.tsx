@@ -59,6 +59,13 @@ interface AppUser {
   isProfessional?: boolean; // ← n
 }
 
+export const ALL_SPECIES = [
+  "Water Hyacinth",
+  "Water Lettuce",
+  "Siam Weed",
+  "Lantana Camara",
+];
+
 export default function Index() {
   const router = useRouter();
   const { pendingPin, clearPendingPin } = usePinStore();
@@ -297,6 +304,7 @@ export default function Index() {
       longitude: pendingPin.lng,
       specie_label: pendingPin.label,
       image_url: pendingPin.image || "https://picsum.photos/536/354",
+      detections: pendingPin.detections, // ← new
     };
 
     handleAddPin(autoPin);
@@ -423,6 +431,7 @@ export default function Index() {
           specie_label: newPin.specie_label,
           image_url: imageUrl || "https://picsum.photos/536/354",
           images: uploadedImages,
+          detections: newPin.detections ?? {}, // ← new
           verifications: [initialVerification],
           userId: currentUser.uid,
           created_by:

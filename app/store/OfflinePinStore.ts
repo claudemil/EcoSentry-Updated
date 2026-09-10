@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { PinDetection } from "@/components/MapComponent";
 export type OfflinePin = {
   id: string;
   label: string;
@@ -10,6 +10,8 @@ export type OfflinePin = {
   image: string;       // thumbnail (image_url)
   images?: string[];   
   timestamp: number;
+    detections?: Record<string, PinDetection>; // ← new
+
 }; 
 
 type OfflinePinStore = {

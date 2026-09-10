@@ -19,11 +19,12 @@ import {
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { useYOLOv8n, type Detection } from "@/hooks/use-YOLOv8n";
-import { preprocessImage } from "@/utils/preprocessImage";
+import { preprocessImage, unletterboxDetection } from "@/utils/preprocessImage";
 import * as ImageManipulator from "expo-image-manipulator";
 import { COLORS } from "@/constants/Colors";
 import { getBestDetection, CLASS_NAMES } from "@/hooks/use-YOLOv8n";
 import { Ionicons } from "@expo/vector-icons";
+import { PinDetection } from "@/components/MapComponent";
 
 // Model input is 640x640 (square), camera preview fills SCREEN_W x SCREEN_H
 // Camera fills by cropping the longer axis, so we scale by the larger dimension
@@ -86,12 +87,49 @@ function ObserveScreenActive() {
     borderRightWidth: index % 2 === 1 ? 3 : 0,
   });
 
-  const DETECTION_COLORS = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63"];
-  const getDetectionColor = (label: string) => {
-    const index = CLASS_NAMES.indexOf(label);
-    return DETECTION_COLORS[index % DETECTION_COLORS.length] ?? "#4CAF50";
+  const SPECIES_BOX_COLORS: Record<string, string> = {
+    "Water Hyacinth": "#1E88E5",
+    "Water Lettuce": "#00897B",
+    "Siam Weed": "#D81B60",
+    "Lantana Camara": "#6D4C41",
   };
-  // ✅ Runs once per button tap instead of looping continuously
+
+  const getDetectionColor = (label: string) => {
+    return SPECIES_BOX_COLORS[label] ?? "#999";
+  };
+
+  // const runDetection = useCallback(async () => {
+  //   if (!cameraRef.current || isInferringRef.current || isPinningRef.current)
+  //     return;
+  //   isInferringRef.current = true;
+  //   setIsInferring(true);
+
+  //   try {
+  //     const photo = await cameraRef.current.takePictureAsync({
+  //       base64: true,
+  //       quality: 0.2,
+  //       skipProcessing: true,
+  //       imageType: "jpg",
+  //     });
+  //     if (!photo?.base64) return;
+
+  //     const inputTensor = await preprocessImage(photo.base64);
+  //     const results = await runInference(inputTensor);
+
+  //     // ✅ Freeze here whether or not we got a match — user asked for a scan,
+  //     // they should see the result rather than the loop silently retrying
+  //     setCapturedFrame(`data:image/jpeg;base64,${photo.base64}`);
+  //     setDetections(results);
+  //     isPausedRef.current = true;
+  //     setIsPaused(true);
+  //   } catch (e) {
+  //     console.error("Detection error:", e);
+  //   } finally {
+  //     isInferringRef.current = false;
+  //     setIsInferring(false);
+  //   }
+  // }, [runInference]);
+
   const runDetection = useCallback(async () => {
     if (!cameraRef.current || isInferringRef.current || isPinningRef.current)
       return;
@@ -105,13 +143,21 @@ function ObserveScreenActive() {
         skipProcessing: true,
         imageType: "jpg",
       });
+      console.log("🔍 Captured photo dimensions:", photo.width, photo.height);
       if (!photo?.base64) return;
 
-      const inputTensor = await preprocessImage(photo.base64);
-      const results = await runInference(inputTensor);
+      const preprocessResult = await preprocessImage(
+        photo.base64,
+        photo.width,
+        photo.height,
+      );
+      const rawResults = await runInference(preprocessResult.tensor);
 
-      // ✅ Freeze here whether or not we got a match — user asked for a scan,
-      // they should see the result rather than the loop silently retrying
+      // Map detections from the padded 640x640 model-space back to the original photo's aspect ratio
+      const results = rawResults.map((det) =>
+        unletterboxDetection(det, preprocessResult),
+      );
+
       setCapturedFrame(`data:image/jpeg;base64,${photo.base64}`);
       setDetections(results);
       isPausedRef.current = true;
@@ -123,7 +169,6 @@ function ObserveScreenActive() {
       setIsInferring(false);
     }
   }, [runInference]);
-
   const handleScanPress = () => {
     if (model.state !== "loaded") return;
     runDetection();
@@ -162,6 +207,23 @@ function ObserveScreenActive() {
 
     const pinImage = capturedFrame ?? "";
 
+    // Build detections map from the full detections array, not just bestDetection
+    const detectionsMap: Record<string, PinDetection> = {};
+    detections.forEach((det, i) => {
+      console.log(
+        `🔍 Detection ${i} bbox:`,
+        det.label,
+        JSON.stringify(det.bbox),
+      );
+      detectionsMap[`det-${i}`] = {
+        label: det.label,
+        confidence: det.confidence,
+        bbox: det.bbox,
+        isBest: i === 0,
+        speciesVerifications: [],
+      };
+    });
+
     let offlineImage = "";
     if (capturedFrame) {
       try {
@@ -194,14 +256,13 @@ function ObserveScreenActive() {
       const longitude = (loc as any).coords.longitude;
 
       if (isOnline) {
-        // ✅ Just stage the pin — no upload, no Firestore write here.
-        // The actual save happens on index.tsx once the user confirms.
         usePinStore.getState().setPendingPin({
           label: bestDetection.label,
           lat: latitude,
           lng: longitude,
-          image: pinImage, // local URI/base64 — index.tsx uploads it on confirm
+          image: pinImage,
           timestamp: Date.now(),
+          detections: detectionsMap, // ← new
         });
 
         setTimeout(() => {
@@ -214,6 +275,7 @@ function ObserveScreenActive() {
           lat: latitude,
           lng: longitude,
           image: offlineImage,
+          detections: detectionsMap, // ← new
           timestamp: Date.now(),
         });
 
@@ -275,9 +337,12 @@ function ObserveScreenActive() {
           cameraDims.width > 0 &&
           detections.map((detection, i) => {
             const isBest = i === 0;
-            const color = isBest
-              ? "#4CAF50"
-              : getDetectionColor(detection.label);
+            const hasLowConfidence = detection.confidence <= 0.6;
+            const color = hasLowConfidence
+              ? "#FF1714" // bright red overrides everything else when confidence is low
+              : isBest
+                ? "#4CAF50"
+                : getDetectionColor(detection.label);
 
             return (
               <View
@@ -309,7 +374,7 @@ function ObserveScreenActive() {
             );
           })}
 
-        <View style={styles.liveIndicator}>
+        {/* <View style={styles.liveIndicator}>
           <View
             style={[
               styles.liveDot,
@@ -331,16 +396,16 @@ function ObserveScreenActive() {
                   ? `${detections.length} detected`
                   : "Ready"}
           </Text>
-        </View>
+        </View> */}
 
         {/* New: legend info button */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.legendInfoBtn}
           onPress={() => setShowLegendModal(true)}
           activeOpacity={0.7}
         >
           <Ionicons name="information-circle-outline" size={22} color="#fff" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {!isPaused && (
           <TouchableOpacity
@@ -380,11 +445,23 @@ function ObserveScreenActive() {
                 onPress={handlePinThis}
                 activeOpacity={0.8}
               >
-                <Text style={styles.pinBtnIcon}>📍</Text>
                 <Text style={styles.pinBtnText}>Pin This</Text>
               </TouchableOpacity>
 
               <View style={styles.secondaryActionsRow}>
+                <TouchableOpacity
+                  style={styles.secondaryActionBtn}
+                  onPress={() => setShowLegendModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={14}
+                    color="#666"
+                  />
+                  <Text style={styles.secondaryActionText}>Legend</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.secondaryActionBtn}
                   onPress={() => setShowStatsModal(true)}
@@ -469,7 +546,12 @@ function ObserveScreenActive() {
 
             {/* Per-detection confidence list */}
             <Text style={styles.sectionLabel}>All Detections</Text>
-            <ScrollView style={styles.statsList}>
+            <ScrollView
+              style={styles.statsList}
+              contentContainerStyle={styles.statsListContent}
+              indicatorStyle="black" // closest built-in iOS option; true custom color needs a workaround below
+              showsVerticalScrollIndicator={true}
+            >
               {detections.map((det, i) => (
                 <View key={i} style={styles.statsListItem}>
                   <View
@@ -539,6 +621,16 @@ function ObserveScreenActive() {
                 </View>
               </View>
             ))}
+
+            <View style={styles.legendItem}>
+              <View style={[styles.legendSwatch, { borderColor: "#FF1744" }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.legendItemTitle}>Low Confidence</Text>
+                <Text style={styles.legendItemSubtitle}>
+                  Detected, but not confident
+                </Text>
+              </View>
+            </View>
 
             <TouchableOpacity
               style={[styles.secondaryButton, { marginTop: 12 }]}
@@ -646,6 +738,7 @@ const styles = StyleSheet.create({
   },
   actionBtnsColumn: {
     gap: 8,
+    minWidth: 168,
   },
   secondaryActionsRow: {
     flexDirection: "row",
@@ -655,23 +748,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 3,
     backgroundColor: "#F0F0F0",
     borderRadius: 8,
     paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 6, // reduced slightly since 3 buttons share the row now
     flex: 1,
   },
   secondaryActionText: {
-    fontSize: 8,
+    fontSize: 10, // reduced slightly to fit "Legend"/"Stats"/"Skip" in tighter columns
     fontWeight: "600",
     color: "#666",
   },
   pinBtn: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: COLORS.green700,
-    paddingVertical: 10,
+    width: "100%",
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
   },
@@ -681,8 +776,9 @@ const styles = StyleSheet.create({
   },
   pinBtnText: {
     color: COLORS.white,
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "800",
+    fontSize: 18,
+    textAlign: "center",
   },
   resumeBtn: {
     paddingVertical: 10,
@@ -703,12 +799,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 40,
     alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(235, 245, 236, 0.75)", // Translucent green overlay background
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  hintText: { color: "#aaa", fontSize: 14 },
+  hintText: { color: COLORS.green700, fontSize: 14 },
   bbox: {
     position: "absolute",
     borderWidth: 2,
@@ -818,6 +914,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     gap: 8,
+  },
+  statsListContent: {
+    paddingRight: 12, // creates breathing room between content and the scrollbar
   },
   statsSpeciesDot: {
     width: 10,

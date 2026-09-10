@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { PinDetection } from '@/components/MapComponent';
 
 type PendingPin = {
   label: string;
@@ -6,6 +7,8 @@ type PendingPin = {
   lng: number;
   image: string;
   timestamp: number;
+    detections?: Record<string, PinDetection>; // ← new
+
 };
 
 type PinStore = {
