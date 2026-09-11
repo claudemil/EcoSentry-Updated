@@ -29,6 +29,7 @@ import {
 } from "@/components/MapComponent";
 import { Alert } from "react-native";
 import { ALL_SPECIES } from "./(tabs)";
+import { getDetectionColor, SPECIES_BOX_COLORS } from "./(tabs)/observe";
 
 // Placeholder mock data — swap with real pin photos later
 type PinAlbum = {
@@ -61,6 +62,9 @@ export default function GalleryScreen() {
     detection: PinDetection;
   } | null>(null);
   const [showSpeciesCorrection, setShowSpeciesCorrection] = useState(false);
+  const [showLegendModal, setShowLegendModal] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyingOption, setVerifyingOption] = useState<string | null>(null);
 
   const currentUser = auth.currentUser;
   const [naturalImageSize, setNaturalImageSize] = useState({
@@ -234,15 +238,60 @@ export default function GalleryScreen() {
 
   const getDetectionVerdict = (det: PinDetection): boolean | null => {
     const verifications = det.speciesVerifications ?? [];
-    if (verifications.length === 0) return null; // no one has verified it yet
+    if (verifications.length === 0) return null;
 
-    const correctVotes = verifications.filter((v) => v.correct).length;
-    const incorrectVotes = verifications.length - correctVotes;
-
-    if (correctVotes > incorrectVotes) return true;
-    if (incorrectVotes > correctVotes) return false;
-    return null; // tie — treat as inconclusive
+    // Most recent verification wins
+    const latest = verifications.reduce((a, b) =>
+      b.timestamp > a.timestamp ? b : a,
+    );
+    return latest.correct;
   };
+
+  // const verifyDetection = async (
+  //   pinId: string,
+  //   detId: string,
+  //   correct: boolean,
+  //   correctedLabel?: string,
+  // ) => {
+  //   const currentUser = auth.currentUser;
+  //   if (!currentUser) {
+  //     Alert.alert("Login required", "Please log in to verify detections.");
+  //     setVerifyPrompt(null);
+  //     setShowSpeciesCorrection(false);
+  //     return;
+  //   }
+
+  //   try {
+  //     const verification: SpeciesVerification = {
+  //       userId: currentUser.uid,
+  //       correct,
+  //       timestamp: Date.now(),
+  //       ...(correctedLabel ? { correctedLabel } : {}),
+  //     };
+
+  //     await updateDoc(doc(db, "pins", pinId), {
+  //       [`detections.${detId}.speciesVerifications`]: arrayUnion(verification),
+  //     });
+
+  //     await fetchPins();
+
+  //     Alert.alert(
+  //       "Thanks!",
+  //       correct
+  //         ? "Marked as correctly identified."
+  //         : `Marked as incorrect${correctedLabel ? ` — noted as ${correctedLabel}` : ""}.`,
+  //     );
+  //   } catch (e) {
+  //     console.error("Failed to verify detection:", e);
+  //     Alert.alert(
+  //       "Error",
+  //       "Could not save your verification. Please try again.",
+  //     );
+  //   } finally {
+  //     setVerifyPrompt(null);
+  //     setShowSpeciesCorrection(false);
+  //   }
+  // };
 
   const verifyDetection = async (
     pinId: string,
@@ -257,6 +306,10 @@ export default function GalleryScreen() {
       setShowSpeciesCorrection(false);
       return;
     }
+
+    const optionKey = correct ? "correct" : (correctedLabel ?? "not_sure");
+    setIsVerifying(true);
+    setVerifyingOption(optionKey);
 
     try {
       const verification: SpeciesVerification = {
@@ -285,11 +338,12 @@ export default function GalleryScreen() {
         "Could not save your verification. Please try again.",
       );
     } finally {
+      setIsVerifying(false);
+      setVerifyingOption(null);
       setVerifyPrompt(null);
       setShowSpeciesCorrection(false);
     }
   };
-
   const openAlbum = (album: PinAlbum) => {
     setActiveAlbum(album);
     setActiveIndex(0);
@@ -471,11 +525,15 @@ export default function GalleryScreen() {
                       ([detId, det]) => {
                         const verdict = getDetectionVerdict(det); // true | false | null
 
-                        const getBoxColor = () => {
-                          if (verdict === true) return "#4CAF50"; // confirmed correct
-                          if (verdict === false) return COLORS.pinRed; // confirmed wrong
-                          if (det.isBest) return "#FFC107"; // unverified, best detection
-                          return "rgba(255,255,255,0.7)"; // unverified, other detection
+                        const getBoxColor = () => getDetectionColor(det.label);
+
+                        const getBoxStyle = ():
+                          | "solid"
+                          | "dashed"
+                          | "dotted" => {
+                          if (verdict === true) return "solid"; // confirmed correct
+                          if (verdict === false) return "dashed"; // confirmed wrong
+                          return det.isBest ? "solid" : "dotted"; // unverified: best vs. other
                         };
 
                         return (
@@ -495,11 +553,30 @@ export default function GalleryScreen() {
                               top: offsetY + det.bbox.y * renderedHeight,
                               width: det.bbox.width * renderedWidth,
                               height: det.bbox.height * renderedHeight,
-                              borderWidth: det.isBest ? 2.5 : 1.5,
+                              borderWidth: det.isBest ? 2.5 : 2,
                               borderColor: getBoxColor(),
+                              borderStyle: getBoxStyle(),
                               borderRadius: 4,
                             }}
                           >
+                            {det.isBest && (
+                              <>
+                                {/* corner brackets — one per corner */}
+                                <View
+                                  style={[styles.cornerBase, styles.cornerTL]}
+                                />
+                                <View
+                                  style={[styles.cornerBase, styles.cornerTR]}
+                                />
+                                <View
+                                  style={[styles.cornerBase, styles.cornerBL]}
+                                />
+                                <View
+                                  style={[styles.cornerBase, styles.cornerBR]}
+                                />
+                              </>
+                            )}
+
                             <View style={styles.detectionTapLabel}>
                               <Text
                                 style={styles.detectionTapLabelText}
@@ -553,8 +630,58 @@ export default function GalleryScreen() {
                   </View>
                 </>
               )}
+              {activeIndex === 0 && activeAlbum?.detections && (
+                <>
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={styles.performanceBtn}
+                      onPress={() => setShowPerformanceModal(true)}
+                    >
+                      <Ionicons
+                        name="analytics-outline"
+                        size={16}
+                        color="#fff"
+                      />
+                      <Text style={styles.performanceBtnText}>
+                        Model Performance
+                      </Text>
+                    </TouchableOpacity>
 
-              {activeIndex === 0 && activeAlbum.detections && (
+                    <TouchableOpacity
+                      style={styles.legendBtn}
+                      onPress={() => setShowLegendModal(true)}
+                    >
+                      <Ionicons
+                        name="information-circle-outline"
+                        size={16}
+                        color="#fff"
+                      />
+                      <Text style={styles.legendBtnText}>Legend</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.viewOnMapBtn}
+                      onPress={() => {
+                        const pinId = activeAlbum.pinId;
+                        setActiveAlbum(null);
+                        router.push({
+                          pathname: "/",
+                          params: { highlightPinId: pinId },
+                        });
+                      }}
+                    >
+                      <Text style={styles.viewOnMapBtnText}>
+                        📍 View on map
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.tapHintText}>
+                    Tap a box to verify its species
+                  </Text>
+                </>
+              )}
+              {/* {activeIndex === 0 && activeAlbum.detections && (
                 <View
                   style={{ flexDirection: "row", justifyContent: "center" }}
                 >
@@ -581,27 +708,13 @@ export default function GalleryScreen() {
                     <Text style={styles.viewOnMapBtnText}>📍 View on map</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              )} */}
 
-              {activeIndex === 0 && activeAlbum.detections && (
+              {/* {activeIndex === 0 && activeAlbum.detections && (
                 <Text style={styles.tapHintText}>
                   Tap a box to verify its species
                 </Text>
-              )}
-
-              {/* <TouchableOpacity
-                style={styles.viewOnMapBtn}
-                onPress={() => {
-                  const pinId = activeAlbum.pinId;
-                  setActiveAlbum(null);
-                  router.push({
-                    pathname: "/",
-                    params: { highlightPinId: pinId },
-                  });
-                }}
-              >
-                <Text style={styles.viewOnMapBtnText}>📍 View on map</Text>
-              </TouchableOpacity> */}
+              )} */}
             </>
           )}
         </View>
@@ -635,16 +748,22 @@ export default function GalleryScreen() {
             <View style={styles.verifyPromptBtnRow}>
               <TouchableOpacity
                 style={styles.verifyPromptYesBtn}
+                disabled={isVerifying}
                 onPress={() =>
                   verifyPrompt &&
                   verifyDetection(verifyPrompt.pinId, verifyPrompt.detId, true)
                 }
               >
-                <Text style={styles.verifyPromptYesBtnText}>✓ Correct</Text>
+                {isVerifying && verifyingOption === "correct" ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.verifyPromptYesBtnText}>✓ Correct</Text>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.verifyPromptNoBtn}
+                disabled={isVerifying}
                 onPress={() => setShowSpeciesCorrection(true)}
               >
                 <Text style={styles.verifyPromptNoBtnText}>✕ Incorrect</Text>
@@ -675,7 +794,7 @@ export default function GalleryScreen() {
             <Text style={styles.title}>What is it actually?</Text>
             <Text style={styles.verifyPromptSubtitle}>
               The model guessed{" "}
-              <Text style={{ fontWeight: "700" }}>
+              <Text style={{ fontWeight: "700", color: COLORS.green700 }}>
                 {verifyPrompt?.detection.label}
               </Text>
               . Select the correct species:
@@ -688,6 +807,7 @@ export default function GalleryScreen() {
                   <TouchableOpacity
                     key={species}
                     style={[styles.categoryOption, { borderColor: color }]}
+                    disabled={isVerifying}
                     onPress={() =>
                       verifyPrompt &&
                       verifyDetection(
@@ -698,10 +818,19 @@ export default function GalleryScreen() {
                       )
                     }
                   >
-                    <View
-                      style={[styles.categoryDot, { backgroundColor: color }]}
-                    />
-                    <Text style={styles.categoryOptionText}>{species}</Text>
+                    {isVerifying && verifyingOption === species ? (
+                      <ActivityIndicator size="small" color={color} />
+                    ) : (
+                      <>
+                        <View
+                          style={[
+                            styles.categoryDot,
+                            { backgroundColor: color },
+                          ]}
+                        />
+                        <Text style={styles.categoryOptionText}>{species}</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 );
               },
@@ -709,20 +838,29 @@ export default function GalleryScreen() {
 
             <TouchableOpacity
               style={[styles.categoryOption, { borderColor: "#999" }]}
+              disabled={isVerifying}
               onPress={() =>
                 verifyPrompt &&
                 verifyDetection(verifyPrompt.pinId, verifyPrompt.detId, false)
               }
             >
-              <View style={[styles.categoryDot, { backgroundColor: "#999" }]} />
-              <Text
-                style={[
-                  styles.categoryOptionText,
-                  { color: COLORS.textSecondary },
-                ]}
-              >
-                Not sure / Not a listed species
-              </Text>
+              {isVerifying && verifyingOption === "not_sure" ? (
+                <ActivityIndicator size="small" color="#999" />
+              ) : (
+                <>
+                  <View
+                    style={[styles.categoryDot, { backgroundColor: "#999" }]}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryOptionText,
+                      { color: COLORS.textSecondary },
+                    ]}
+                  >
+                    Not sure / Not a listed species
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -735,15 +873,6 @@ export default function GalleryScreen() {
         </View>
       </Modal>
 
-      {activeIndex === 0 && activeAlbum?.detections && (
-        <TouchableOpacity
-          style={styles.performanceBtn}
-          onPress={() => setShowPerformanceModal(true)}
-        >
-          <Ionicons name="analytics-outline" size={16} color="#fff" />
-          <Text style={styles.performanceBtnText}>Model Performance</Text>
-        </TouchableOpacity>
-      )}
       <Modal
         visible={showPerformanceModal}
         transparent
@@ -832,6 +961,96 @@ export default function GalleryScreen() {
             <TouchableOpacity
               style={[styles.secondaryButton, { marginTop: 12 }]}
               onPress={() => setShowPerformanceModal(false)}
+            >
+              <Text style={styles.secondaryButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showLegendModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLegendModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.performanceModalContent}>
+            <Text style={styles.title}>Detection Box Legend</Text>
+
+            <ScrollView style={{ maxHeight: 400, marginTop: 8 }}>
+              <Text style={styles.legendSectionTitle}>Box Color — Species</Text>
+              {Object.entries(SPECIES_BOX_COLORS).map(([label, color]) => (
+                <View key={label} style={styles.legendRow}>
+                  <View
+                    style={[styles.legendSwatch, { backgroundColor: color }]}
+                  />
+                  <Text style={styles.legendLabel}>{label}</Text>
+                </View>
+              ))}
+
+              <Text style={[styles.legendSectionTitle, { marginTop: 16 }]}>
+                Border Style — Verification
+              </Text>
+              <View style={styles.legendRow}>
+                <View
+                  style={[
+                    styles.legendSwatch,
+                    {
+                      borderStyle: "solid",
+                      borderWidth: 2,
+                      borderColor: "#4CAF50",
+                      backgroundColor: "transparent",
+                    },
+                  ]}
+                />
+                <Text style={styles.legendLabel}>
+                  Solid — confirmed correct
+                </Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View
+                  style={[
+                    styles.legendSwatch,
+                    {
+                      borderStyle: "dashed",
+                      borderWidth: 2,
+                      borderColor: COLORS.pinRed,
+                      backgroundColor: "transparent",
+                    },
+                  ]}
+                />
+                <Text style={styles.legendLabel}>Dashed — confirmed wrong</Text>
+              </View>
+              <View style={styles.legendRow}>
+                <View
+                  style={[
+                    styles.legendSwatch,
+                    {
+                      borderStyle: "dotted",
+                      borderWidth: 2,
+                      borderColor: "#999",
+                      backgroundColor: "transparent",
+                    },
+                  ]}
+                />
+                <Text style={styles.legendLabel}>
+                  Dotted — not yet verified
+                </Text>
+              </View>
+
+              <Text style={[styles.legendSectionTitle, { marginTop: 16 }]}>
+                Corner Brackets
+              </Text>
+              <Text style={styles.legendLabel}>
+                Yellow corner brackets mark the model's best detection for this
+                photo.
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, { marginTop: 12 }]}
+              onPress={() => setShowLegendModal(false)}
             >
               <Text style={styles.secondaryButtonText}>Close</Text>
             </TouchableOpacity>
@@ -952,7 +1171,7 @@ const styles = StyleSheet.create({
   },
   viewOnMapBtn: {
     position: "absolute",
-    bottom: 40,
+    bottom: 50,
     backgroundColor: "#4CAF50",
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -1289,5 +1508,82 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
     fontWeight: "600",
+  },
+  cornerBase: {
+    position: "absolute",
+    width: 14,
+    height: 14,
+    borderColor: "#fff", // best-detection accent color
+  },
+  cornerTL: {
+    top: -3,
+    left: -3,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 4,
+  },
+  cornerTR: {
+    top: -3,
+    right: -3,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 4,
+  },
+  cornerBL: {
+    bottom: -3,
+    left: -3,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 4,
+  },
+  cornerBR: {
+    bottom: -3,
+    right: -3,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 4,
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  legendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  legendBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  legendSectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.green700,
+    marginBottom: 6,
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  legendSwatch: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontSize: 13,
+    color: "#000000",
+    flexShrink: 1,
   },
 });
