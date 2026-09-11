@@ -29,6 +29,16 @@ import { PinDetection } from "@/components/MapComponent";
 // Model input is 640x640 (square), camera preview fills SCREEN_W x SCREEN_H
 // Camera fills by cropping the longer axis, so we scale by the larger dimension
 
+export const SPECIES_BOX_COLORS: Record<string, string> = {
+  "Water Hyacinth": "#1E88E5",
+  "Water Lettuce": "#00897B",
+  "Siam Weed": "#D81B60",
+  "Lantana Camara": "#6D4C41",
+};
+
+export const getDetectionColor = (label: string) => {
+  return SPECIES_BOX_COLORS[label] ?? "#999";
+};
 export default function ObserveScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -86,17 +96,6 @@ function ObserveScreenActive() {
     borderLeftWidth: index % 2 === 0 ? 3 : 0,
     borderRightWidth: index % 2 === 1 ? 3 : 0,
   });
-
-  const SPECIES_BOX_COLORS: Record<string, string> = {
-    "Water Hyacinth": "#1E88E5",
-    "Water Lettuce": "#00897B",
-    "Siam Weed": "#D81B60",
-    "Lantana Camara": "#6D4C41",
-  };
-
-  const getDetectionColor = (label: string) => {
-    return SPECIES_BOX_COLORS[label] ?? "#999";
-  };
 
   // const runDetection = useCallback(async () => {
   //   if (!cameraRef.current || isInferringRef.current || isPinningRef.current)
