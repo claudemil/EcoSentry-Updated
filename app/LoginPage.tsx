@@ -10,6 +10,7 @@ import {
   Alert,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { Stack } from "expo-router";
@@ -35,6 +36,7 @@ const COLORS = {
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -43,6 +45,7 @@ export default function LoginPage() {
     }
 
     try {
+      setIsVerifying(true);
       // 1. Query Firestore to find the user's email based on their username
       const usersRef = collection(db, "users");
       const q = query(usersRef, where("username", "==", username));
@@ -76,6 +79,8 @@ export default function LoginPage() {
       });
     } catch (e: any) {
       Alert.alert("Error", "Invalid username or password");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -159,6 +164,7 @@ export default function LoginPage() {
             <TouchableOpacity
               style={styles.primaryAction}
               onPress={handleLogin}
+              disabled={isVerifying}
             >
               <View style={styles.menuLeft}>
                 <Ionicons
@@ -167,6 +173,13 @@ export default function LoginPage() {
                   color={COLORS.white}
                 />
                 <Text style={styles.primaryActionText}>Login</Text>
+                {isVerifying && (
+                  <ActivityIndicator
+                    size="small"
+                    color="#fff"
+                    style={{ marginLeft: 8 }}
+                  />
+                )}
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
             </TouchableOpacity>
@@ -174,6 +187,7 @@ export default function LoginPage() {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => router.push("/RegisterPage")}
+              disabled={isVerifying}
             >
               <View style={styles.menuLeft}>
                 <Ionicons

@@ -10,6 +10,7 @@ import {
   Alert,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { Stack } from "expo-router";
@@ -34,6 +35,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [isProfessional, setIsProfessional] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleRegister = async () => {
     if (!username || !password || !confirmPassword || !email) {
@@ -47,6 +49,7 @@ export default function RegisterPage() {
     }
 
     try {
+      setIsVerifying(true);
       // 1. Create User in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -87,6 +90,8 @@ export default function RegisterPage() {
       }
 
       Alert.alert("Error", errorMessage);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -225,6 +230,7 @@ export default function RegisterPage() {
             <TouchableOpacity
               style={styles.primaryAction}
               onPress={handleRegister}
+              disabled={isVerifying}
             >
               <View style={styles.menuLeft}>
                 <Ionicons
@@ -233,6 +239,13 @@ export default function RegisterPage() {
                   color={COLORS.white}
                 />
                 <Text style={styles.primaryActionText}>Create Account</Text>
+                {isVerifying && (
+                  <ActivityIndicator
+                    size="small"
+                    color="#fff"
+                    style={{ marginLeft: 8 }}
+                  />
+                )}
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.white} />
             </TouchableOpacity>
@@ -240,6 +253,7 @@ export default function RegisterPage() {
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => router.back()}
+              disabled={isVerifying}
             >
               <View style={styles.menuLeft}>
                 <Ionicons

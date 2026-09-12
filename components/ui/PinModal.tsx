@@ -36,6 +36,7 @@ const PinModal = ({
   // ✅ Guard against null pinData inside the initializer instead
   const [images, setImages] = useState<string[]>(pinData?.images ?? []);
   const [showVerificationLog, setShowVerificationLog] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     setImages(pinData?.images ?? []);
@@ -105,17 +106,26 @@ const PinModal = ({
       return;
     }
 
-    onVerify?.(String(pinData.id), isVisible);
+    try {
+      setIsVerifying(true);
 
-    setLocalVerifications((prev) => [
-      ...prev,
-      {
-        timestamp: Date.now(),
-        verified: isVisible,
-        userId: currentUser.uid,
-        userName: currentUser.displayName || currentUser.email || "Anonymous", // ← new
-      },
-    ]);
+      console.log(
+        "calling onverify function from mapcomponent, this is pinmodal",
+      );
+      onVerify?.(String(pinData.id), isVisible);
+
+      setLocalVerifications((prev) => [
+        ...prev,
+        {
+          timestamp: Date.now(),
+          verified: isVisible,
+          userId: currentUser.uid,
+          userName: currentUser.displayName || currentUser.email || "Anonymous", // ← new
+        },
+      ]);
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const isCreateMode = mode === "create";
@@ -300,10 +310,10 @@ const PinModal = ({
                 <TouchableOpacity
                   style={[
                     styles.verifyYesBtn,
-                    !canVerify && styles.verifyBtnDisabled,
+                    (!canVerify || isVerifying) && styles.verifyBtnDisabled,
                   ]}
                   onPress={() => handleVerifyPress(true)}
-                  disabled={!canVerify}
+                  disabled={!canVerify || isVerifying}
                 >
                   <Text
                     style={[
@@ -318,7 +328,7 @@ const PinModal = ({
                 <TouchableOpacity
                   style={[
                     styles.dangerButton,
-                    !canVerify && styles.verifyBtnDisabled,
+                    (!canVerify || isVerifying) && styles.verifyBtnDisabled,
                   ]}
                   onPress={() => handleVerifyPress(false)}
                   disabled={!canVerify}
