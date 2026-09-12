@@ -370,8 +370,6 @@ export default function Index() {
       console.log("5b️⃣ Starting image upload check");
 
       let imageUrl = newPin.image_url;
-      console.log("Checking image url..", imageUrl);
-
       if (
         imageUrl &&
         !imageUrl.startsWith("http://") &&
@@ -483,6 +481,7 @@ export default function Index() {
     };
 
     try {
+      console.log("Got the call! this is index ");
       const pinRef = doc(db, "pins", pinId);
       await updateDoc(pinRef, {
         verifications: arrayUnion(entry),
@@ -498,6 +497,8 @@ export default function Index() {
     } catch (e) {
       console.error("Verification failed:", e);
       Alert.alert("Error", "Could not save verification. Please try again.");
+    } finally {
+      console.log("Verification saved successfully!");
     }
   };
 

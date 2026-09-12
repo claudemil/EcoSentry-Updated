@@ -209,11 +209,6 @@ function ObserveScreenActive() {
     // Build detections map from the full detections array, not just bestDetection
     const detectionsMap: Record<string, PinDetection> = {};
     detections.forEach((det, i) => {
-      console.log(
-        `🔍 Detection ${i} bbox:`,
-        det.label,
-        JSON.stringify(det.bbox),
-      );
       detectionsMap[`det-${i}`] = {
         label: det.label,
         confidence: det.confidence,
