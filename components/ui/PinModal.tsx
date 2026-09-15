@@ -37,6 +37,8 @@ const PinModal = ({
   const [images, setImages] = useState<string[]>(pinData?.images ?? []);
   const [showVerificationLog, setShowVerificationLog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setImages(pinData?.images ?? []);
@@ -167,6 +169,24 @@ const PinModal = ({
     console.log("1️⃣ handleSavePress: calling onSave");
     await onSave?.({ ...pinData, images }, mode);
     console.log("2️⃣ handleSavePress: onSave finished");
+  };
+
+  const handleDeletePress = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setIsDeleting(true);
+      // await onDeletePin(pinData.id); // wire this to your actual delete API/store action
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (err) {
+      console.error("Failed to delete pin:", err);
+      // optionally surface a toast/alert here
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (!pinData) return null;
@@ -352,7 +372,7 @@ const PinModal = ({
             </View>
           )}
 
-          <View style={styles.buttonContainer}>
+          {/* <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.secondaryButton, { flex: 1 }]}
               onPress={onClose}
@@ -361,10 +381,10 @@ const PinModal = ({
               <Text style={styles.secondaryButtonText}>
                 {isCreateMode ? "Cancel" : "Close"}
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
-            {/* ✅ Shown in both modes now, since photos can be added post-creation too */}
-            {isOwner && (
+          {/* ✅ Shown in both modes now, since photos can be added post-creation too */}
+          {/* {isOwner && (
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
@@ -373,6 +393,52 @@ const PinModal = ({
                 ]}
                 onPress={handleSavePress}
                 disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {isCreateMode ? "Save Pin" : "Save Changes"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )} */}
+          {/* </View> */}
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { flex: 1 }]}
+              onPress={onClose}
+              disabled={isSaving || isDeleting}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {isCreateMode ? "Cancel" : "Close"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* ✅ Delete — only owner, and only for existing pins */}
+            {isOwner && !isCreateMode && (
+              <TouchableOpacity
+                style={[
+                  styles.dangerOutlineButton,
+                  isDeleting && styles.disabledButton,
+                ]}
+                onPress={handleDeletePress}
+                disabled={isSaving || isDeleting}
+              >
+                <Text style={styles.dangerOutlineButtonText}>Delete</Text>
+              </TouchableOpacity>
+            )}
+
+            {isOwner && (
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  { flex: 1.5 },
+                  (isSaving || isDeleting) && styles.disabledButton,
+                ]}
+                onPress={handleSavePress}
+                disabled={isSaving || isDeleting}
               >
                 {isSaving ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -456,6 +522,49 @@ const PinModal = ({
                 <Text style={styles.savingOverlayText}>Saving pin...</Text>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isDeleting && setShowDeleteConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.title}>Delete this pin?</Text>
+            <Text style={styles.confirmBodyText}>
+              This will permanently remove "{pinData.specie_label}" and its
+              photos. This action can't be undone.
+            </Text>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.secondaryButton, { flex: 1 }]}
+                onPress={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.dangerButton,
+                  { flex: 1 },
+                  isDeleting && styles.disabledButton,
+                ]}
+                onPress={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.dangerButtonText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -758,6 +867,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginTop: 10,
+  },
+  // Confirmation card — same shape language as modalContent, slightly smaller
+  confirmModalContent: {
+    width: "85%",
+    padding: 24,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    shadowColor: "#2e7d32",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  confirmBodyText: {
+    fontSize: 14,
+    color: "#4b4b4b",
+    marginTop: 8,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+
+  // Outline-style delete trigger, sits quietly between Close and Save
+  dangerOutlineButton: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: "#d32f2f",
+    borderRadius: 14,
+    paddingVertical: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 4,
+  },
+  dangerOutlineButtonText: {
+    color: "#d32f2f",
+    fontWeight: "600",
+    fontSize: 14,
   },
 });
 
