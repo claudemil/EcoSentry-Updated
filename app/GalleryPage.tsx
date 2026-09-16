@@ -944,8 +944,12 @@ export default function GalleryScreen() {
 
                       {stat.unverifiedCount > 0 && (
                         <Text style={styles.metricNote}>
-                          {stat.unverifiedCount} unverified — tap its box to
-                          help improve this score.
+                          <Text
+                            style={{ color: COLORS.green700, fontWeight: 700 }}
+                          >
+                            {stat.unverifiedCount} unverified
+                          </Text>{" "}
+                          — tap its box to help improve this score.
                         </Text>
                       )}
                     </View>

@@ -130,6 +130,7 @@ interface MapComponentProps {
   pins: SpeciesPin[];
   onPinAdded: (pin: SpeciesPin) => void;
   onSave?: (pin: SpeciesPin, mode: "view" | "create") => Promise<void>;
+  onDelete?: (pin: SpeciesPin) => Promise<void>;
   userLocation: { longitude: number; latitude: number } | null;
   onLocationChange: (coords: { longitude: number; latitude: number }) => void;
   selectedSpecies: string;
@@ -139,6 +140,7 @@ interface MapComponentProps {
   onVerify?: (pinId: string, isVisible: boolean) => void;
   onStatusChange: (s: string) => void;
   isSaving: boolean;
+  isDeleting: boolean;
 }
 
 export interface AppUser {
@@ -173,10 +175,12 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
       selectedSpecies,
       isLoggedIn,
       onSave,
+      onDelete,
       highlightPinId,
       onVerify,
       onStatusChange,
       isSaving,
+      isDeleting,
     },
     ref,
   ) => {
@@ -782,6 +786,10 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
               onSave?.(finalData!, mode);
               setisPinModalOpen(false);
             }}
+            onDelete={async (pin) => {
+              await onDelete?.(pin);
+              setisPinModalOpen(false);
+            }}
             onClose={() => setisPinModalOpen(false)}
             pinData={(() => {
               if (!selectedPinId) return null;
@@ -805,6 +813,8 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
                     null
                 : null,
             )}
+            isSaving={isSaving}
+            isDeleting={isDeleting}
           />
           <PinModal
             visible={isAddPinModalOpen}

@@ -36,6 +36,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
   addDoc,
   setDoc,
   getDocs,
@@ -74,6 +75,7 @@ export default function Index() {
   const [pins, setPins] = useState<SpeciesPin[]>([]);
   const [isImageFullscreen, setIsImageFullscreen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [userLocation, setUserLocation] = useState<{
     longitude: number;
     latitude: number;
@@ -466,6 +468,64 @@ export default function Index() {
       setIsSaving(false);
     }
   };
+
+  const performDelete = async (pin: SpeciesPin) => {
+    console.log("5️⃣ performDelete: started");
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      Alert.alert("Error", "Your session has expired. Please login again.");
+      setIsLoggedIn(false);
+      return;
+    }
+
+    setIsDeleting(true); // ← start
+
+    try {
+      const network = await NetInfo.fetch();
+      const isOnline = network.isConnected && network.isInternetReachable;
+
+      if (!isOnline) {
+        Alert.alert(
+          "You're offline",
+          "Deleting pins requires an internet connection. Please try again once you're back online.",
+        );
+        return;
+      }
+
+      // ── Online branch ──
+
+      console.log("5b️⃣ Deleting pin from Firestore:", pin.id);
+
+      const pinRef = doc(db, "pins", String(pin.id));
+      await deleteDoc(pinRef);
+      console.log("5c️⃣ Firestore delete done:", pin.id);
+
+      // Only decrement the counter for the pin's original creator
+      const ownerUid = pin.creator?.uid ?? pin.userId;
+      if (ownerUid) {
+        const userRef = doc(db, "users", ownerUid);
+        await setDoc(userRef, { pins_count: increment(-1) }, { merge: true });
+        console.log("5d️⃣ pins_count decrement done");
+      }
+
+      setTimeout(() => {
+        fetchPins();
+      }, 0);
+
+      Alert.alert("Deleted", "Pin successfully removed.");
+    } catch (error) {
+      console.error("Error deleting pin from Firestore:", error);
+      Alert.alert(
+        "Delete Failed",
+        "Could not delete your pin. Please try again.",
+      );
+    } finally {
+      console.log("6️⃣ performDelete: finished (finally block)");
+      setIsDeleting(false);
+    }
+  };
+
   const handleVerifyPin = async (pinId: string, isVisible: boolean) => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -567,6 +627,7 @@ export default function Index() {
           pins={pins}
           onPinAdded={handleAddPin}
           onSave={performSave}
+          onDelete={performDelete}
           userLocation={userLocation}
           onLocationChange={(coords) => setUserLocation(coords)}
           selectedSpecies={selectedSpecies}
@@ -576,6 +637,7 @@ export default function Index() {
           onVerify={handleVerifyPin}
           onStatusChange={setSelectedStatus}
           isSaving={isSaving} // ← new
+          isDeleting={isDeleting}
         />
 
         {/* Persistent hamburger toggle — always visible */}

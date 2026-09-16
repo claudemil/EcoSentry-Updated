@@ -11,6 +11,7 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  Touchable,
 } from "react-native";
 import { router } from "expo-router";
 import { Stack } from "expo-router";
@@ -34,6 +35,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [isProfessional, setIsProfessional] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -67,6 +69,7 @@ export default function RegisterPage() {
         pins_count: 0,
         zones_count: 0,
         isProfessional: isProfessional, // ← new field
+        isAdmin: isAdmin,
       });
       Alert.alert("Success", "Account created successfully!");
 
@@ -219,7 +222,26 @@ export default function RegisterPage() {
                   <Ionicons name="checkmark" size={14} color={COLORS.white} />
                 )}
               </View>
-              <Text style={styles.checkboxLabel}>I am a professional</Text>
+              <Text style={styles.checkboxLabel}>
+                I am a
+                <Text style={{ color: COLORS.green700 }}> Professional</Text>
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              activeOpacity={0.7}
+              onPress={() => setIsAdmin((prev) => !prev)}
+            >
+              <View
+                style={[styles.checkbox, isAdmin && styles.checkboxChecked]}
+              >
+                {isAdmin && (
+                  <Ionicons name="checkmark" size={14} color={COLORS.white} />
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                I am <Text style={{ color: COLORS.green700 }}>ADMIN</Text>
+              </Text>
             </TouchableOpacity>
           </View>
 

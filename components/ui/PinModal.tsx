@@ -15,21 +15,25 @@ interface PinModalProp {
   onClose: () => void;
   pinData: SpeciesPin | null;
   onSave?: (data: SpeciesPin, mode: "view" | "create") => void; // ✅ mode added
+  onDelete?: (data: SpeciesPin) => void;
   mode: "view" | "create";
   setHighlightedNeighborId?: (id: string | null) => void;
   onVerify?: (pinId: string, isVisible: boolean) => void;
   canVerify?: boolean; // ✅ new — is the user physically near this pin?
   isSaving?: boolean;
+  isDeleting?: boolean;
 }
 const PinModal = ({
   visible,
   onClose,
   onSave,
+  onDelete,
   pinData,
   mode,
   onVerify,
   canVerify,
   isSaving,
+  isDeleting,
 }: PinModalProp) => {
   const [creatorName, setCreatorName] = useState<string>("Loading...");
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
@@ -38,7 +42,6 @@ const PinModal = ({
   const [showVerificationLog, setShowVerificationLog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setImages(pinData?.images ?? []);
@@ -176,17 +179,10 @@ const PinModal = ({
   };
 
   const handleConfirmDelete = async () => {
-    try {
-      setIsDeleting(true);
-      // await onDeletePin(pinData.id); // wire this to your actual delete API/store action
-      setShowDeleteConfirm(false);
-      onClose();
-    } catch (err) {
-      console.error("Failed to delete pin:", err);
-      // optionally surface a toast/alert here
-    } finally {
-      setIsDeleting(false);
-    }
+    if (!onDelete || !pinData) return;
+    await onDelete(pinData);
+    setShowDeleteConfirm(false);
+    onClose();
   };
 
   if (!pinData) return null;
@@ -407,7 +403,10 @@ const PinModal = ({
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[styles.secondaryButton, { flex: 1 }]}
+              style={[
+                styles.secondaryButton,
+                { paddingHorizontal: 12, justifyContent: "center" },
+              ]}
               onPress={onClose}
               disabled={isSaving || isDeleting}
             >
@@ -417,7 +416,20 @@ const PinModal = ({
             </TouchableOpacity>
 
             {/* ✅ Delete — only owner, and only for existing pins */}
-            {isOwner && !isCreateMode && (
+            {/* {isOwner && !isCreateMode && (
+              <TouchableOpacity
+                style={[
+                  styles.dangerOutlineButton,
+                  isDeleting && styles.disabledButton,
+                ]}
+                onPress={handleDeletePress}
+                disabled={isSaving || isDeleting}
+              >
+                <Text style={styles.dangerOutlineButtonText}>Delete</Text>
+              </TouchableOpacity>
+            )} */}
+
+            {isOwner && !isCreateMode && pinData && (
               <TouchableOpacity
                 style={[
                   styles.dangerOutlineButton,
@@ -536,8 +548,11 @@ const PinModal = ({
           <View style={styles.confirmModalContent}>
             <Text style={styles.title}>Delete this pin?</Text>
             <Text style={styles.confirmBodyText}>
-              This will permanently remove "{pinData.specie_label}" and its
-              photos. This action can't be undone.
+              This will permanently remove "
+              <Text style={{ color: COLORS.green700 }}>
+                {pinData.specie_label}
+              </Text>
+              " This action can't be undone.
             </Text>
 
             <View style={styles.buttonContainer}>
@@ -559,7 +574,7 @@ const PinModal = ({
                 disabled={isDeleting}
               >
                 {isDeleting ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color="#2E7D32" size="small" />
                 ) : (
                   <Text style={styles.dangerButtonText}>Delete</Text>
                 )}
@@ -683,7 +698,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "white",
     fontWeight: "800",
-    fontSize: 18,
+    fontSize: 14,
   },
   secondaryButton: {
     backgroundColor: "#f5f5f5",
@@ -694,7 +709,7 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: "#666",
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 14,
   },
   photoStrip: {
     marginVertical: 8,
