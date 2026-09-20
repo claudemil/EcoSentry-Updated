@@ -141,6 +141,7 @@ interface MapComponentProps {
   onStatusChange: (s: string) => void;
   isSaving: boolean;
   isDeleting: boolean;
+  isAdmin?: boolean;
 }
 
 export interface AppUser {
@@ -181,6 +182,7 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
       onStatusChange,
       isSaving,
       isDeleting,
+      isAdmin,
     },
     ref,
   ) => {
@@ -815,6 +817,7 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
             )}
             isSaving={isSaving}
             isDeleting={isDeleting}
+            isAdmin={isAdmin}
           />
           <PinModal
             visible={isAddPinModalOpen}
@@ -832,8 +835,8 @@ const MapComponent = forwardRef<MapComponentHandle, MapComponentProps>(
             onClose={() => setisAddPinModalOpen(false)}
             pinData={pendingPin}
             isSaving={isSaving}
+            isAdmin={isAdmin}
           />
-          {/* Saved zones */}
           {zones.map((zone) => {
             const centroid = getPolygonCentroid(zone.coordinates);
             const speciesList: string[] = Array.isArray(zone.species)

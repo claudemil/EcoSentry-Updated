@@ -22,6 +22,7 @@ interface PinModalProp {
   canVerify?: boolean; // ✅ new — is the user physically near this pin?
   isSaving?: boolean;
   isDeleting?: boolean;
+  isAdmin?: boolean;
 }
 const PinModal = ({
   visible,
@@ -34,10 +35,10 @@ const PinModal = ({
   canVerify,
   isSaving,
   isDeleting,
+  isAdmin,
 }: PinModalProp) => {
   const [creatorName, setCreatorName] = useState<string>("Loading...");
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
-  // ✅ Guard against null pinData inside the initializer instead
   const [images, setImages] = useState<string[]>(pinData?.images ?? []);
   const [showVerificationLog, setShowVerificationLog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -368,45 +369,9 @@ const PinModal = ({
             </View>
           )}
 
-          {/* <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.secondaryButton, { flex: 1 }]}
-              onPress={onClose}
-              disabled={isSaving}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {isCreateMode ? "Cancel" : "Close"}
-              </Text>
-            </TouchableOpacity> */}
-
-          {/* ✅ Shown in both modes now, since photos can be added post-creation too */}
-          {/* {isOwner && (
-              <TouchableOpacity
-                style={[
-                  styles.primaryButton,
-                  { flex: 1.5 },
-                  isSaving && styles.disabledButton,
-                ]}
-                onPress={handleSavePress}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {isCreateMode ? "Save Pin" : "Save Changes"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )} */}
-          {/* </View> */}
-
           <View style={styles.buttonContainer}>
             <TouchableOpacity
-              style={[
-                styles.secondaryButton,
-                { paddingHorizontal: 12, justifyContent: "center" },
-              ]}
+              style={[styles.secondaryButton, { flex: 1 }]}
               onPress={onClose}
               disabled={isSaving || isDeleting}
             >
@@ -415,24 +380,11 @@ const PinModal = ({
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ Delete — only owner, and only for existing pins */}
-            {/* {isOwner && !isCreateMode && (
+            {isAdmin && !isCreateMode && pinData && (
               <TouchableOpacity
                 style={[
                   styles.dangerOutlineButton,
-                  isDeleting && styles.disabledButton,
-                ]}
-                onPress={handleDeletePress}
-                disabled={isSaving || isDeleting}
-              >
-                <Text style={styles.dangerOutlineButtonText}>Delete</Text>
-              </TouchableOpacity>
-            )} */}
-
-            {isOwner && !isCreateMode && pinData && (
-              <TouchableOpacity
-                style={[
-                  styles.dangerOutlineButton,
+                  { flex: 1 },
                   isDeleting && styles.disabledButton,
                 ]}
                 onPress={handleDeletePress}
@@ -455,7 +407,9 @@ const PinModal = ({
                 {isSaving ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>
+                  <Text
+                    style={[styles.primaryButtonText, { paddingHorizontal: 4 }]}
+                  >
                     {isCreateMode ? "Save Pin" : "Save Changes"}
                   </Text>
                 )}
@@ -698,7 +652,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "white",
     fontWeight: "800",
-    fontSize: 14,
+    fontSize: 12,
   },
   secondaryButton: {
     backgroundColor: "#f5f5f5",

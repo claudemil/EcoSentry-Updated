@@ -69,7 +69,7 @@ export default function RegisterPage() {
         pins_count: 0,
         zones_count: 0,
         isProfessional: isProfessional, // ← new field
-        isAdmin: isAdmin,
+        isAdmin: false,
       });
       Alert.alert("Success", "Account created successfully!");
 
@@ -227,7 +227,7 @@ export default function RegisterPage() {
                 <Text style={{ color: COLORS.green700 }}> Professional</Text>
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.checkboxRow}
               activeOpacity={0.7}
               onPress={() => setIsAdmin((prev) => !prev)}
@@ -242,7 +242,7 @@ export default function RegisterPage() {
               <Text style={styles.checkboxLabel}>
                 I am <Text style={{ color: COLORS.green700 }}>ADMIN</Text>
               </Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Action card */}
