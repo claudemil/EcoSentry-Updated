@@ -20,7 +20,6 @@ import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import MapComponent, {
   SpeciesPin,
-  User,
   MapComponentHandle,
   PinVerification,
 } from "@/components/MapComponent";
@@ -58,6 +57,7 @@ interface AppUser {
   pins_count?: number;
   zones_count?: number;
   isProfessional?: boolean; // ← n
+  isAdmin?: boolean;
 }
 
 export const ALL_SPECIES = [
@@ -144,6 +144,7 @@ export default function Index() {
 
   const handleRecenter = async () => {
     try {
+      console.log(user!.isAdmin);
       await mapRef.current?.centerOnUser();
     } catch (e) {
       Alert.alert("Location error", "Could not get your current location.");
@@ -153,7 +154,6 @@ export default function Index() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = ["18%", "38%"];
   const mapRef = useRef<MapComponentHandle>(null);
-  const fabScale = useSharedValue(1);
 
   const fetchPins = async () => {
     try {
@@ -240,6 +240,7 @@ export default function Index() {
               pins_count: userData.pins_count || 0,
               zones_count: userData.zones_count || 0,
               isProfessional: userData.isProfessional,
+              isAdmin: userData.isAdmin,
             });
             setIsLoggedIn(true);
             console.log("you are logged in as", firebaseUser.email);
@@ -419,10 +420,16 @@ export default function Index() {
           images: uploadedImages,
         });
       } else {
+        const displayName =
+          user?.username ||
+          currentUser.displayName ||
+          currentUser.email ||
+          "Anonymous User";
         const initialVerification: PinVerification = {
           timestamp: Date.now(),
           verified: true,
           userId: currentUser.uid,
+          userName: displayName,
         };
 
         const pinPayload = {
@@ -582,10 +589,6 @@ export default function Index() {
     }
   };
 
-  // const initials = user?.username
-  //   ? user.username.slice(0, 2).toUpperCase()
-  //   : "GU";
-
   if (initializing) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -638,6 +641,7 @@ export default function Index() {
           onStatusChange={setSelectedStatus}
           isSaving={isSaving} // ← new
           isDeleting={isDeleting}
+          isAdmin={!!user?.isAdmin}
         />
 
         {/* Persistent hamburger toggle — always visible */}
@@ -653,7 +657,6 @@ export default function Index() {
           />
         </TouchableOpacity>
 
-        {/* Recenter stays outside the menu — high-frequency action, worth keeping always accessible */}
         <TouchableOpacity
           style={styles.recenterBtn}
           activeOpacity={0.8}
